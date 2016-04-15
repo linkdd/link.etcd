@@ -7,10 +7,17 @@ from link.etcd.middleware import EtcdMiddleware
 
 
 class EtcdConfDriver(ConfDriver):
+    """
+    Driver that reads configuration from **etcd**.
+    """
+
     def __init__(self, *args, **kwargs):
         super(EtcdConfDriver, self).__init__(*args, **kwargs)
 
         self.client = EtcdMiddleware()
+
+    def __del__(self):
+        self.client.disconnect()
 
     def rscpaths(self, path):
         return [path]

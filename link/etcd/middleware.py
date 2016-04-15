@@ -1,37 +1,70 @@
 # -*- coding: utf-8 -*-
 
-from b3j0f.conf import Configurable, Category, Parameter
-from b3j0f.middleware import Middleware
+from b3j0f.conf import Configurable, category, Parameter
+from link.middleware import ConnectableMiddleware
 
 from etcd import Client, EtcdKeyNotFound
 import os
 
 
 @Configurable(
-    paths='etcd-conf/middleware.conf',
-    conf=Category(
+    paths='link/etcd/middleware.conf',
+    conf=category(
         'ETCD',
-        Parameter('host', value='localhost'),
-        Parameter('port', value=4001),
-        Parameter('allow_redirect', value=True),
-        Parameter('protocol', value='http')
+        Parameter(name='host', value='localhost'),
+        Parameter(name='port', ptype=int, value=4001),
+        Parameter(name='srv_domain', value=None),
+        Parameter(name='version_prefix', value='/v2'),
+        Parameter(name='read_timeout', ptype=int, value=60),
+        Parameter(name='allow_redirect', ptype=bool, value=True),
+        Parameter(name='protocol', value='http'),
+        Parameter(name='cert', value=None),
+        Parameter(name='ca_cert', value=None),
+        Parameter(name='username', value=None),
+        Parameter(name='password', value=None),
+        Parameter(name='allow_reconnect', ptype=bool, value=False),
+        Parameter(name='use_proxies', ptype=bool, value=False),
+        Parameter(name='expected_cluster_id', value=None),
+        Parameter(name='per_host_pool_size', ptype=int, value=10)
     )
 )
-class EtcdMiddleware(Middleware):
+class EtcdMiddleware(ConnectableMiddleware):
+    """
+    Middleware that connects to **etcd**.
+
+    The following operations are available:
+
+    .. code-block:: python
+
+       client = EtcdMiddleware()
+       client['/path'] = value
+       value = client['/path']
+       del client['/path']
+       '/path' in client
+
+    If ``value`` is a ``dict``, then paths are created recursively.
+    If ``value`` is a ``list``, then items are appended to the directory.
+    """
 
     __protocols__ = ['etcd']
-
-    def __init__(self, *args, **kwargs):
-        super(EtcdMiddleware, self).__init__(*args, **kwargs)
-
-        self._conn = None
 
     def _connect(self):
         return Client(
             host=self.host,
             port=self.port,
+            srv_domain=self.srv_domain,
+            version_prefix=self.version_prefix,
+            read_timeout=self.read_timeout,
             allow_redirect=self.allow_redirect,
-            protocol=self.protocol
+            protocol=self.protocol,
+            cert=self.cert,
+            ca_cert=self.ca_cert,
+            username=self.username,
+            password=self.password,
+            allow_reconnect=self.allow_reconnect,
+            use_proxies=self.use_proxies,
+            expected_cluster_id=self.expected_cluster_id,
+            per_host_pool_size=self.per_host_pool_size
         )
 
     def _disconnect(self, conn):
@@ -40,40 +73,26 @@ class EtcdMiddleware(Middleware):
     def _isconnected(self, conn):
         return conn is not None
 
-    @property
-    def conn(self):
-        self.connect()
-        return self._conn
-
-    def isconnected(self):
-        return self._isconnected(self._conn)
-
-    def connect(self):
-        if not self.isconnected():
-            self._conn = self._connect()
-
-    def disconnect(self):
-        if self.isconnected():
-            self._disconnect(self._conn)
-            self._conn = None
-
-    def __getitem__(self, path):
-        try:
-            node = self.conn.read(path)
-
-        except EtcdKeyNotFound as err:
-            raise KeyError(str(err))
+    def _readval(self, path):
+        node = self.conn.read(path, recursive=True)
 
         if node.dir:
-            dirnode = self.conn.read(path, recursive=True)
-
             result = {
-                child.key: child.value
-                for child in dirnode.leaves
+                child.key: self._readval(os.path.join(path, child.key))
+                for child in node._children
             }
 
         else:
             result = node.value
+
+        return result
+
+    def __getitem__(self, path):
+        try:
+            result = self._readval(path)
+
+        except EtcdKeyNotFound as err:
+            raise KeyError(str(err))
 
         return result
 
