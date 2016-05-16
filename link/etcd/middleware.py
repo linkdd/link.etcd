@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 
 from b3j0f.conf import Configurable, category, Parameter
-from link.middleware import ConnectableMiddleware
+from link.middleware.connectable import ConnectableMiddleware
+from link.etcd import CONF_BASE_PATH
 
 from etcd import Client, EtcdKeyNotFound
 import os
 
 
 @Configurable(
-    paths='link/etcd/middleware.conf',
+    paths='{0}/middleware.conf'.format(CONF_BASE_PATH),
     conf=category(
         'ETCD',
         Parameter(name='host', value='localhost'),
