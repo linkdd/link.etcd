@@ -13,8 +13,8 @@ AUTHOR = 'David Delassus'
 AUTHOR_EMAIL = 'david.jose.delassus@gmail.com'
 LICENSE = 'MIT'
 REQUIREMENTS = [
-    'b3j0f.conf>=0.3.18',
-    'link.middleware>=1.4',
+    'b3j0f.conf>=0.3.19',
+    'link.middleware>=1.5',
     'python-etcd>=0.4.3'
 ]
 
